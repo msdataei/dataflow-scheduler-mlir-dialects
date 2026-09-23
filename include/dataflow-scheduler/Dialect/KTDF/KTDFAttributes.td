@@ -66,4 +66,34 @@ def KTDF_LoopTypeAttr : EnumAttr<KTDF_Dialect, KTDF_LoopTypeEnum, "loop_type"> {
   let assemblyFormat = "`<` $value `>`";
 }
 
+//===----------------------------------------------------------------------===//
+// SplatModeAttr
+//===----------------------------------------------------------------------===//
+
+def KTDF_SplatModeAttr : EnumAttr<KTDF_Dialect, KTDF_SplatModeEnum, "splat"> {
+  let summary = "KTDF splat mode attribute naming the shuffle a splat still needs";
+  let description = [{
+    A load unit cannot always splat a single element: when its smallest access
+    granularity is wider than the source, the hardware loads the whole granule
+    and splats that, so one element per sub-SIMD group ends up live rather than
+    one for the whole vector.
+
+    This attribute names the shuffle that closes the gap, and so says both that
+    a splat was left half done and how it is finished.
+
+    `first_subsimd_lane_to_all_subsimd_lanes` fills every lane of each sub-SIMD
+    group with the value its first lane holds.  The group width is not stated
+    here: it is the compute unit's `ktdf_arch.feature.simd = { sub_simd_lanes }`.
+
+    Example:
+
+    ```mlir
+    %d = ktdf.read_from_fifo %slot
+        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
+    ```
+  }];
+  let assemblyFormat = "`<` $value `>`";
+}
+
 #endif // DATAFLOW_SCHEDULER_DIALECT_KTDF_KTDFATTRIBUTES_TD

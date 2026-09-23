@@ -39,4 +39,18 @@ def KTDF_LoopTypeEnum : I32EnumAttr<"LoopType",
   let genSpecializedAttr = 0;
 }
 
+//===----------------------------------------------------------------------===//
+// Splat Mode Enum
+//===----------------------------------------------------------------------===//
+
+def KTDF_SplatModeEnum : I32EnumAttr<"SplatMode",
+    "Splat a load unit left half done, named by the shuffle that finishes it",
+    [
+      I32EnumAttrCase<"FirstSubSimdLaneToAllSubSimdLanes", 0,
+                      "first_subsimd_lane_to_all_subsimd_lanes">
+    ]> {
+  let cppNamespace = "::mlir::ktdf";
+  let genSpecializedAttr = 0;
+}
+
 #endif // DATAFLOW_SCHEDULER_DIALECT_KTDF_KTDFENUMS_TD

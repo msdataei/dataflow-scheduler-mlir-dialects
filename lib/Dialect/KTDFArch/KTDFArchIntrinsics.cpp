@@ -515,6 +515,12 @@ auto feature::SIMD::verify(EmitErrorFn emit_error) const -> LogicalResult {
                         << "' requires map from type to 64-bit integer";
   }
 
+  const auto sub_simd_lanes = getAttr(kSubSimdLanesAttrName);
+  if (sub_simd_lanes && !isa<LanesAttr>(sub_simd_lanes)) {
+    return emit_error() << "attribute '" << kSubSimdLanesAttrName
+                        << "' requires map from type to 64-bit integer";
+  }
+
   return success();
 }
 

@@ -30,6 +30,7 @@ include "mlir/Interfaces/LoopLikeInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpAsmInterface.td"
 
+include "dataflow-scheduler/Dialect/KTDF/KTDFAttributes.td"
 include "dataflow-scheduler/Dialect/KTDF/KTDFTypes.td"
 
 // Base class for KTDF dialect operations
@@ -168,6 +169,19 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
     limited to the op's parent region scope, cannot leave that scope (eg via
     yield) and does not alias any other memrefs.
 
+    ## Splat mode
+
+    The optional `splat` attribute says that what arrives over the FIFO is a
+    splat the load unit could not finish, and names the shuffle that does. A
+    unit whose smallest access granularity is wider than the source loads the
+    whole granule and splats that, so one element per sub-SIMD group ends up
+    live rather than one for the whole vector.
+
+    The scheduler's splat annotation sets the attribute on every read of such a
+    transfer, and the lowering to DFIR emits the shuffle it names right after
+    the receive. A device pattern that re-reads the slot as a buffer carries the
+    attribute over, since the shuffle is still owed.
+
     Example:
     ```mlir
     // Read from a FIFO slot into a tensor
@@ -182,11 +196,17 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
     %size = arith.constant 8 : index
     %dyn_slot = ktdf.fifo.allocate(%size) -> !ktdf.fifo.slot<"SFU" -> "L1SU", ?xf16>
     %dyn_data = ktdf.read_from_fifo %dyn_slot : !ktdf.fifo.slot<"SFU" -> "L1SU", ?xf16> -> tensor<?xf16>
+
+    // Read a splat the load unit left one element per sub-SIMD group wide
+    %splat = ktdf.read_from_fifo %slot
+        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
     ```
   }];
 
   let arguments = (ins
-    KTDF_FifoSlotType:$fifo_slot
+    KTDF_FifoSlotType:$fifo_slot,
+    OptionalAttr<KTDF_SplatModeAttr>:$splat
   );
 
   let results = (outs
@@ -198,6 +218,14 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
   }];
 
   let hasVerifier = 1;
+
+  let builders = [
+    // A read of a slot that owes no shuffle, which is every read but the one a
+    // half-done splat feeds.
+    OpBuilder<(ins "::mlir::Type":$result, "::mlir::Value":$fifo_slot), [{
+      build($_builder, $_state, result, fifo_slot, /*splat=*/nullptr);
+    }]>
+  ];
 
   let extraClassDeclaration = [{
     /// Returns the element type of the FIFO slot
