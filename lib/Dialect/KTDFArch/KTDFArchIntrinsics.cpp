@@ -557,6 +557,22 @@ auto feature::SIMD::test(feature::SIMD requirements) const -> bool {
     }
   }
 
+  if (const auto required = requirements.getSubSimdLanes(); required) {
+    const auto required_lanes = required.getEntries();
+    const auto provided_lanes = getSubSimdLanes();
+
+    if (!provided_lanes && !required_lanes.empty()) {
+      return false;
+    }
+
+    if (llvm::any_of(required_lanes, [&](const auto& require) -> bool {
+          return provided_lanes.getValue(require.first) <
+                 require.second.getValue();
+        })) {
+      return false;
+    }
+  }
+
   return true;
 }
 
