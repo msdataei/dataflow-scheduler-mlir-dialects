@@ -198,7 +198,7 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
 
     // Read a splat the load unit left one element per sub-SIMD group wide
     %splat = ktdf.read_from_fifo %slot
-        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>}
         : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
     ```
   }];

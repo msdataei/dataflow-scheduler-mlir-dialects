@@ -46,8 +46,8 @@ def KTDF_LoopTypeEnum : I32EnumAttr<"LoopType",
 def KTDF_SplatModeEnum : I32EnumAttr<"SplatMode",
     "KTDF splat mode attribute indicating how to form a full SIMD vector from a subset of elements",
     [
-      I32EnumAttrCase<"FirstSubSimdLaneToAllSubSimdLanes", 0,
-                      "first_subsimd_lane_to_all_subsimd_lanes">
+      I32EnumAttrCase<"FirstSubSimdLaneToEachSubSimd", 0,
+                      "first_subsimd_lane_to_each_subsimd">
     ]> {
   let cppNamespace = "::mlir::ktdf";
   let genSpecializedAttr = 0;

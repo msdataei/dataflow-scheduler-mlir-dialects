@@ -60,8 +60,8 @@ module {
 
 // CHECK-LABEL:   func.func @read_from_fifo_splat() {
 // CHECK-NEXT:     %[[FIFO_0:.*]] = ktdf.fifo.allocate() -> !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16>
-// CHECK-NEXT:     %[[READ_FROM_FIFO_0:.*]] = ktdf.read_from_fifo %[[FIFO_0]] {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>} : <"L1LU" -> "SFU", 64xf16> -> tensor<64xf16>
-// CHECK-NEXT:     %[[READ_FROM_FIFO_1:.*]] = ktdf.read_from_fifo %[[FIFO_0]] {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>} : <"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
+// CHECK-NEXT:     %[[READ_FROM_FIFO_0:.*]] = ktdf.read_from_fifo %[[FIFO_0]] {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>} : <"L1LU" -> "SFU", 64xf16> -> tensor<64xf16>
+// CHECK-NEXT:     %[[READ_FROM_FIFO_1:.*]] = ktdf.read_from_fifo %[[FIFO_0]] {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>} : <"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
 // CHECK-NEXT:     "test.op"(%[[READ_FROM_FIFO_0]], %[[READ_FROM_FIFO_1]]) : (tensor<64xf16>, memref<64xf16>) -> ()
 // CHECK-NEXT:     return
 // CHECK-NEXT:   }
@@ -71,11 +71,11 @@ module {
     %slot0 = ktdf.fifo.allocate() -> !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16>
 
     %data0 = ktdf.read_from_fifo %slot0
-        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>}
         : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> tensor<64xf16>
 
     %buf0 = ktdf.read_from_fifo %slot0
-        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>}
         : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
 
     "test.op"(%data0, %buf0) : (tensor<64xf16>, memref<64xf16>) -> ()

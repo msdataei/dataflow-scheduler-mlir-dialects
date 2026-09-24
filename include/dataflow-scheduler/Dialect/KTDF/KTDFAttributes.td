@@ -77,7 +77,7 @@ def KTDF_SplatModeAttr : EnumAttr<KTDF_Dialect, KTDF_SplatModeEnum, "splat"> {
     delivered over the FIFO. The FIFO carries fewer than a full SIMD width of
     elements; the attribute names the shuffle that fills in the remaining lanes.
 
-    `first_subsimd_lane_to_all_subsimd_lanes` fills every lane of each sub-SIMD
+    `first_subsimd_lane_to_each_subsimd` fills every lane of each sub-SIMD
     group with the value held by its first lane. The group width is not encoded
     here; it is read from the compute unit's
     `ktdf_arch.feature.simd = { sub_simd_lanes }`.
@@ -86,7 +86,7 @@ def KTDF_SplatModeAttr : EnumAttr<KTDF_Dialect, KTDF_SplatModeEnum, "splat"> {
 
     ```mlir
     %d = ktdf.read_from_fifo %slot
-        {splat = #ktdf.splat<first_subsimd_lane_to_all_subsimd_lanes>}
+        {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>}
         : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
     ```
   }];
