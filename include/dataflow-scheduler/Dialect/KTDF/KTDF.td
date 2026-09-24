@@ -171,11 +171,10 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
 
     ## Splat mode
 
-    The optional `splat` attribute records that the load unit left a splat half
-    done and names the shuffle that finishes it. When a load unit's smallest
-    access granularity is wider than the source element, the hardware loads the
-    whole granule and splats that; one element per sub-SIMD group therefore
-    arrives over the FIFO rather than one for the whole vector.
+    The optional `splat` attribute records how to form a full SIMD-width vector
+    from the subset of elements delivered over the FIFO. The FIFO carries fewer
+    than a full SIMD width of elements; the attribute names the shuffle that
+    fills in the remaining lanes to produce the final vector.
 
     The scheduler sets the attribute on every `ktdf.read_from_fifo` that reads
     such a transfer. The lowering to DFIR emits the named shuffle immediately
@@ -220,8 +219,8 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
   let hasVerifier = 1;
 
   let builders = [
-    // A read of a slot that owes no shuffle, which is every read but the one a
-    // half-done splat feeds.
+    // A read of a slot that owes no shuffle, i.e. every read without a splat
+    // attribute.
     OpBuilder<(ins "::mlir::Type":$result, "::mlir::Value":$fifo_slot), [{
       build($_builder, $_state, result, fifo_slot, /*splat=*/nullptr);
     }]>

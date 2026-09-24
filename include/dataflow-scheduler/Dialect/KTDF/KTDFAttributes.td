@@ -71,13 +71,11 @@ def KTDF_LoopTypeAttr : EnumAttr<KTDF_Dialect, KTDF_LoopTypeEnum, "loop_type"> {
 //===----------------------------------------------------------------------===//
 
 def KTDF_SplatModeAttr : EnumAttr<KTDF_Dialect, KTDF_SplatModeEnum, "splat"> {
-  let summary = "KTDF splat mode attribute naming the shuffle a splat still needs";
+  let summary = "KTDF splat mode attribute indicating how to form a full SIMD vector from a subset of elements";
   let description = [{
-    Records that a load unit left a splat half done and names the shuffle that
-    finishes it. When a load unit's smallest access granularity is wider than
-    the source element, the hardware loads the whole granule and splats that;
-    one element per sub-SIMD group therefore arrives over the FIFO rather than
-    one for the whole vector.
+    Records how to form a full SIMD-width vector from the subset of elements
+    delivered over the FIFO. The FIFO carries fewer than a full SIMD width of
+    elements; the attribute names the shuffle that fills in the remaining lanes.
 
     `first_subsimd_lane_to_all_subsimd_lanes` fills every lane of each sub-SIMD
     group with the value held by its first lane. The group width is not encoded
