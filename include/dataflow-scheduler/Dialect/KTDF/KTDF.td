@@ -171,16 +171,16 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
 
     ## Splat mode
 
-    The optional `splat` attribute says that what arrives over the FIFO is a
-    splat the load unit could not finish, and names the shuffle that does. A
-    unit whose smallest access granularity is wider than the source loads the
-    whole granule and splats that, so one element per sub-SIMD group ends up
-    live rather than one for the whole vector.
+    The optional `splat` attribute records that the load unit left a splat half
+    done and names the shuffle that finishes it. When a load unit's smallest
+    access granularity is wider than the source element, the hardware loads the
+    whole granule and splats that; one element per sub-SIMD group therefore
+    arrives over the FIFO rather than one for the whole vector.
 
-    The scheduler's splat annotation sets the attribute on every read of such a
-    transfer, and the lowering to DFIR emits the shuffle it names right after
-    the receive. A device pattern that re-reads the slot as a buffer carries the
-    attribute over, since the shuffle is still owed.
+    The scheduler sets the attribute on every `ktdf.read_from_fifo` that reads
+    such a transfer. The lowering to DFIR emits the named shuffle immediately
+    after the receive. Any device pattern that re-reads the slot as a buffer
+    must preserve the attribute, because the shuffle is still owed.
 
     Example:
     ```mlir
