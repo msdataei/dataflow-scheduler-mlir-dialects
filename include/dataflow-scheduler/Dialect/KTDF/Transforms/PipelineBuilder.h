@@ -143,9 +143,18 @@ class PipelineBuilder : protected ImplicitLocOpBuilder {
   /// Gets a builder for contained stages.
   [[nodiscard]] auto getStageBuilder() -> ImplicitLocOpBuilder { return *this; }
   /// Gets an OpBuilder to insert reads into @p stage .
+  ///
+  /// New reads are appended after the existing reads at the start of the stage.
   [[nodiscard]] auto getReadBuilder(StageOp stage) -> OpBuilder;
   /// Gets an OpBuilder to insert writes into @p stage .
+  ///
+  /// New writes are appended at the end of the stage.
   [[nodiscard]] auto getWriteBuilder(StageOp stage) -> OpBuilder;
+  /// Gets an OpBuilder to insert @p op into @p stage .
+  ///
+  /// If @p op has users within the stage, it is inserted before the first of
+  /// them. Otherwise, it is appended before the writes at the end of the stage.
+  [[nodiscard]] auto getOpBuilder(StageOp stage, Operation* op) -> OpBuilder;
 
   /// Builds the PipelineOp.
   ///

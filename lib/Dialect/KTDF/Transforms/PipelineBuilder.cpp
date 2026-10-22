@@ -134,16 +134,41 @@ auto PipelineBuilder::getUnits(Attribute attr) const -> ArrayAttr {
 }
 
 auto PipelineBuilder::getReadBuilder(StageOp stage) -> OpBuilder {
+  // Append to the leading reads, so that reads appear in the order they were
+  // created.
   auto& body = *stage.getBody();
-  return OpBuilder(&body, body.begin(), listener);
+  auto it = body.begin();
+  while (it != body.end() && llvm::isa<ReadFromFifoOp>(&*it)) {
+    ++it;
+  }
+  return OpBuilder(&body, it, listener);
 }
 
 auto PipelineBuilder::getWriteBuilder(StageOp stage) -> OpBuilder {
+  // Append to the trailing writes, so that writes appear in the order they were
+  // created.
   auto& body = *stage.getBody();
-  if (body.empty()) {
-    return OpBuilder(&body, body.end(), listener);
+  return OpBuilder(&body, body.end(), listener);
+}
+
+auto PipelineBuilder::getOpBuilder(StageOp stage, Operation* op) -> OpBuilder {
+  // Insert before the first user within the stage, so that the SSA property is
+  // preserved and the producers of a user keep their program order.
+  auto& body = *stage.getBody();
+  Operation* first_user = nullptr;
+  for (auto* const user : op->getUsers()) {
+    auto* const ancestor = body.findAncestorOpInBlock(*user);
+    if (ancestor != nullptr &&
+        (first_user == nullptr || ancestor->isBeforeInBlock(first_user))) {
+      first_user = ancestor;
+    }
+  }
+  if (first_user != nullptr) {
+    return OpBuilder(first_user, listener);
   }
 
+  // Otherwise, append before the trailing writes, so that independent ops
+  // appear in the order they were inserted.
   auto it = body.end();
   while (it != body.begin() && llvm::isa<WriteToFifoOp>(&*std::prev(it))) {
     --it;
@@ -460,7 +485,17 @@ auto PipelineBuilder::insert(Operation* op, Placement placement)
   // This op can safely be moved into the pipeline.
   {
     op->remove();
-    getReadBuilder(placement.stage).insert(op);
+    getOpBuilder(placement.stage, op).insert(op);
+  }
+
+  // Keep the stages in topological order, by moving the stage in front of the
+  // stages that use the results of op.
+  for (auto* const user : op->getUsers()) {
+    auto user_stage = getStage(user);
+    if (user_stage && user_stage != placement.stage &&
+        user_stage->isBeforeInBlock(placement.stage)) {
+      placement.stage->moveBefore(user_stage);
+    }
   }
 
   // Forward all results of this operation to their in-pipeline users.
@@ -482,7 +517,7 @@ void dominanceSort(MutableArrayRef<Operation*> op, DominanceInfo& dominance) {
   llvm::stable_sort(op, [&](Operation* lhs, Operation* rhs) -> bool {
     // NOTE: This code will not work for graph regions, and there is no simple
     //       way to fix that. However, that's not an intended usage scenario.
-    return dominance.properlyDominates(lhs, rhs);
+    return dominance.properlyDominates(rhs, lhs);
   });
 }
 
@@ -522,9 +557,10 @@ void PipelineBuilder::insert(ArrayRef<Operation*> ops, PlacementFn placement_fn,
         work_list.push_back(wants.getOwner());
       }
     }
-    // We need to ensure that dependencies between the producers do not prevent
-    // them from being inserted into the pipeline. We can prevent this from
-    // happening by visiting the producers in reverse dominance order.
+    // Visit the producers in program order, so that they are inserted, and
+    // their values forwarded, in program order. A producer that feeds a later
+    // producer can't be inserted before it; it is visited again once that
+    // producer has been inserted.
     dominanceSort(MutableArrayRef(work_list.data() + split, work_list.end()),
                   dominance);
   }

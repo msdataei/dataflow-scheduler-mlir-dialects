@@ -37,9 +37,14 @@
 
 using namespace mlir;
 
+namespace mlir::ktdf::test {
+void registerTestPipelineBuilderPass();
+}  // namespace mlir::ktdf::test
+
 auto main(int argc, char** argv) -> int {
   registerAllPasses();
   ktdf_arch::registerKTDFArchPasses();
+  ktdf::test::registerTestPipelineBuilderPass();
 
   DialectRegistry registry;
   registry.insert<agen::AgenDialect, dataflow::DataflowDialect,
