@@ -140,15 +140,7 @@ auto PipelineBuilder::getReadBuilder(StageOp stage) -> OpBuilder {
 
 auto PipelineBuilder::getWriteBuilder(StageOp stage) -> OpBuilder {
   auto& body = *stage.getBody();
-  if (body.empty()) {
-    return OpBuilder(&body, body.end(), listener);
-  }
-
-  auto it = body.end();
-  while (it != body.begin() && llvm::isa<WriteToFifoOp>(&*std::prev(it))) {
-    --it;
-  }
-  return OpBuilder(&body, it, listener);
+  return OpBuilder::atBlockEnd(&body, listener);
 }
 
 auto PipelineBuilder::build() -> PipelineOp {
@@ -303,8 +295,13 @@ auto PipelineBuilder::send(OpResult producer, StageOp consumer) -> Value {
     auto builder = getWriteBuilder(producer_stage);
     WriteToFifoOp::create(builder, consumer->getLoc(), producer, slot);
 
-    // On the consumer side, create a new read from the slot.
+    // On the consumer side, create a new read from the slot, after the
+    // existing reads so that they stay in the order of the writes.
     builder = getReadBuilder(consumer);
+    while (builder.getInsertionPoint() != builder.getBlock()->end() &&
+           isa<ReadFromFifoOp>(*builder.getInsertionPoint())) {
+      builder.setInsertionPointAfter(&*builder.getInsertionPoint());
+    }
     read = ReadFromFifoOp::create(builder, consumer->getLoc(),
                                   producer.getType(), slot);
 
@@ -466,11 +463,7 @@ auto PipelineBuilder::insert(Operation* op, Placement placement)
   }
 
   // Forward all results of this operation to their in-pipeline users.
-  // In reverse: each send() creates its write ahead of the writes already in the
-  // producer stage, and the scheduler's allocator numbers the newest slot first,
-  // so the last result sent has its write first and the lowest slot. Sending
-  // result #0 last therefore gives writes and slots in result order.
-  for (auto result : llvm::reverse(results_to_forward)) {
+  for (auto result : results_to_forward) {
     for (auto& use : result.getUses()) {
       auto stage = use.getOwner()->getParentOfType<StageOp>();
       assert(stage && "user outside of pipeline");
