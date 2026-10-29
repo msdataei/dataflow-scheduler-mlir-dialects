@@ -143,6 +143,9 @@ class PipelineBuilder : protected ImplicitLocOpBuilder {
   /// Gets a builder for contained stages.
   [[nodiscard]] auto getStageBuilder() -> ImplicitLocOpBuilder { return *this; }
   /// Gets an OpBuilder to insert reads into @p stage .
+  ///
+  /// Reads are inserted after the reads at the start of the stage, so they
+  /// appear in the order they were created.
   [[nodiscard]] auto getReadBuilder(StageOp stage) -> OpBuilder;
   /// Gets an OpBuilder to insert writes into @p stage .
   [[nodiscard]] auto getWriteBuilder(StageOp stage) -> OpBuilder;
@@ -240,6 +243,8 @@ class PipelineBuilder : protected ImplicitLocOpBuilder {
   ///
   /// If @p operand is already available, does nothing. Otherwise, the value is
   /// sent to the consumer stage and the operand is replaced with the read.
+  /// While `insert` visits ops, the stages are made dependent right away, but
+  /// the send is deferred until the visit is done.
   ///
   /// @pre  `isAvailable(operand) || canReceive(operand)`
   virtual void receive(OpOperand& operand);
@@ -277,6 +282,10 @@ class PipelineBuilder : protected ImplicitLocOpBuilder {
   /// Runs a work list algorithm that attempts to put @p ops and all their
   /// transitive producers into the pipeline. Evalutes @p placement_fn for each
   /// eligible producer to determine the stage it should go to.
+  ///
+  /// The work list visits users before producers, so the FIFOs are only
+  /// created once it is done, in the program order of the producers. Each
+  /// stage then writes and reads its FIFO slots in program order.
   void insert(ArrayRef<Operation*> ops, PlacementFn placement_fn,
               DominanceInfo& dominance);
 
@@ -284,10 +293,24 @@ class PipelineBuilder : protected ImplicitLocOpBuilder {
   explicit PipelineBuilder(PipelineOp pipeline, Allocator* allocator = nullptr,
                            OpBuilder::Listener* listener = nullptr);
 
+  /// Numbers the ops around the pipeline that aren't numbered yet, in program
+  /// order.
+  void numberOps();
+  /// Gets the position of @p op in the program before it was inserted.
+  auto getProgramOrder(Operation* op) -> unsigned;
+  /// Sends the receives deferred by `insert`, in program order.
+  void flushReceives();
+
   PrivateBuilder private_builder_;
   DenseMap<ArrayAttr, StageOp> units_to_stage_;
   DenseMap<StageOp, Token> tokens_;
   Allocator* allocator_;
+  /// The position of each op in the program before it was inserted.
+  DenseMap<Operation*, unsigned> program_order_;
+  /// The receives deferred while `insert` visits the ops.
+  SmallVector<OpOperand*> deferred_receives_;
+  /// Whether `receive` defers its operand.
+  bool defer_receives_ = false;
 };
 
 }  // namespace mlir::ktdf

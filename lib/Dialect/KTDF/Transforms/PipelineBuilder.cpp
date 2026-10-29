@@ -20,6 +20,7 @@
 
 #include <llvm/ADT/BreadthFirstIterator.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/ScopeExit.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/DebugLog.h>
@@ -34,6 +35,8 @@
 #include <mlir/IR/PatternMatch.h>
 #include <mlir/IR/Value.h>
 #include <mlir/Interfaces/SideEffectInterfaces.h>
+
+#include <limits>
 
 #include "dataflow-scheduler/Dialect/KTDF/Analysis/StageGraph.h"
 #include "dataflow-scheduler/Dialect/KTDF/KTDF.h"
@@ -135,7 +138,9 @@ auto PipelineBuilder::getUnits(Attribute attr) const -> ArrayAttr {
 
 auto PipelineBuilder::getReadBuilder(StageOp stage) -> OpBuilder {
   auto& body = *stage.getBody();
-  return OpBuilder(&body, body.begin(), listener);
+  auto it = llvm::find_if_not(
+      body, [](Operation& op) { return isa<ReadFromFifoOp>(op); });
+  return OpBuilder(&body, it, listener);
 }
 
 auto PipelineBuilder::getWriteBuilder(StageOp stage) -> OpBuilder {
@@ -295,13 +300,8 @@ auto PipelineBuilder::send(OpResult producer, StageOp consumer) -> Value {
     auto builder = getWriteBuilder(producer_stage);
     WriteToFifoOp::create(builder, consumer->getLoc(), producer, slot);
 
-    // On the consumer side, create a new read from the slot, after the
-    // existing reads so that they stay in the order of the writes.
+    // On the consumer side, create a new read from the slot.
     builder = getReadBuilder(consumer);
-    while (builder.getInsertionPoint() != builder.getBlock()->end() &&
-           isa<ReadFromFifoOp>(*builder.getInsertionPoint())) {
-      builder.setInsertionPointAfter(&*builder.getInsertionPoint());
-    }
     read = ReadFromFifoOp::create(builder, consumer->getLoc(),
                                   producer.getType(), slot);
 
@@ -321,7 +321,57 @@ void PipelineBuilder::receive(OpOperand& operand) {
   auto consumer_stage = getStage(operand.getOwner());
   assert(consumer_stage);
 
+  if (defer_receives_) {
+    // The dependency is needed right away to detect cycles, but the FIFO is
+    // created once the visit is done, in program order.
+    addDependency(cast<OpResult>(operand.get()).getOwner(), operand.getOwner());
+    deferred_receives_.push_back(&operand);
+    return;
+  }
+
   operand.set(send(cast<OpResult>(operand.get()), consumer_stage));
+}
+
+void PipelineBuilder::numberOps() {
+  auto* const scope = getInsertionBlock()
+                          ->getParentOp()
+                          ->getParentWithTrait<OpTrait::IsIsolatedFromAbove>();
+  scope->walk<WalkOrder::PreOrder>([&](Operation* op) {
+    program_order_.try_emplace(op, program_order_.size());
+  });
+}
+
+auto PipelineBuilder::getProgramOrder(Operation* op) -> unsigned {
+  if (const auto it = program_order_.find(op); it != program_order_.end()) {
+    return it->second;
+  }
+
+  // An op created after numbering (e.g. by a placement) takes the position of
+  // the next numbered op, which comes after it in program order.
+  auto order = std::numeric_limits<unsigned>::max();
+  for (auto* next = op->getNextNode(); next != nullptr;
+       next = next->getNextNode()) {
+    if (const auto it = program_order_.find(next); it != program_order_.end()) {
+      order = it->second;
+      break;
+    }
+  }
+  return program_order_[op] = order;
+}
+
+void PipelineBuilder::flushReceives() {
+  auto receives = std::exchange(deferred_receives_, {});
+  llvm::stable_sort(receives, [&](OpOperand* lhs, OpOperand* rhs) {
+    const auto lhs_producer = cast<OpResult>(lhs->get());
+    const auto rhs_producer = cast<OpResult>(rhs->get());
+    return std::pair(getProgramOrder(lhs_producer.getOwner()),
+                     lhs_producer.getResultNumber()) <
+           std::pair(getProgramOrder(rhs_producer.getOwner()),
+                     rhs_producer.getResultNumber());
+  });
+  for (auto* const operand : receives) {
+    receive(*operand);
+  }
 }
 
 namespace {
@@ -456,10 +506,23 @@ auto PipelineBuilder::insert(Operation* op, Placement placement)
     }
   }
 
-  // This op can safely be moved into the pipeline.
+  // This op can safely be moved into the pipeline. It goes after the reads and
+  // in front of the first op that comes after it in program order, so that the
+  // stage keeps program order across calls to insert.
   {
+    const auto order = getProgramOrder(op);
+    auto& body = *placement.stage.getBody();
+    auto it = llvm::find_if(body, [&](Operation& other) {
+      if (isa<ReadFromFifoOp>(other)) {
+        return false;
+      }
+      const auto other_order = program_order_.find(&other);
+      return isa<WriteToFifoOp>(other) ||
+             (other_order != program_order_.end() &&
+              other_order->second >= order);
+    });
     op->remove();
-    getReadBuilder(placement.stage).insert(op);
+    body.getOperations().insert(it, op);
   }
 
   // Forward all results of this operation to their in-pipeline users.
@@ -492,6 +555,17 @@ void PipelineBuilder::insert(ArrayRef<Operation*> ops, PlacementFn placement_fn,
   assert(placement_fn);
 
   IRRewriter rewriter(*this);
+
+  // Number the ops before any of them moves, and defer the FIFOs until the
+  // visit is done, so that they are created in program order.
+  numberOps();
+  const llvm::scope_exit defer(
+      [&, was_deferring = std::exchange(defer_receives_, true)]() {
+        defer_receives_ = was_deferring;
+        if (!defer_receives_) {
+          flushReceives();
+        }
+      });
 
   // Initialize the work list in reverse order, since we're popping from the
   // back and want to keep the order (to preserve SSA property).
