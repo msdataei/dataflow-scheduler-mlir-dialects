@@ -20,7 +20,7 @@ ktdf_arch.device @my_device attributes {version = 1} {
       ktdf_arch.feature.compute, 
       ktdf_arch.feature.simd = {
         lanes = #ktdf_arch.map<f32 = 4, f16 = 8>,
-        sub_simd_lanes = #ktdf_arch.map<f32 = 2, f16 = 4>
+        lanes_per_slice = #ktdf_arch.map<f32 = 2, f16 = 4>
       }
     }
   }

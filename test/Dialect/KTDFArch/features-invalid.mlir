@@ -84,9 +84,9 @@ ktdf_arch.device @simd_invalid_lanes {
 
 // -----
 
-ktdf_arch.device @simd_invalid_sub_simd_lanes {
-  // expected-error@+1 {{'sub_simd_lanes' requires map from type to 64-bit integer}}
-  exec_unit { ktdf_arch.features = { ktdf_arch.feature.simd = { sub_simd_lanes = 1 } } }
+ktdf_arch.device @simd_invalid_lanes_per_slice {
+  // expected-error@+1 {{'lanes_per_slice' requires map from type to 64-bit integer}}
+  exec_unit { ktdf_arch.features = { ktdf_arch.feature.simd = { lanes_per_slice = 1 } } }
 }
 
 // -----

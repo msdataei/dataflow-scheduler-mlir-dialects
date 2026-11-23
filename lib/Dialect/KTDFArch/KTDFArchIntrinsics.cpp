@@ -515,9 +515,9 @@ auto feature::SIMD::verify(EmitErrorFn emit_error) const -> LogicalResult {
                         << "' requires map from type to 64-bit integer";
   }
 
-  const auto sub_simd_lanes = getAttr(kSubSimdLanesAttrName);
-  if (sub_simd_lanes && !isa<LanesAttr>(sub_simd_lanes)) {
-    return emit_error() << "attribute '" << kSubSimdLanesAttrName
+  const auto lanes_per_slice = getAttr(kLanesPerSliceAttrName);
+  if (lanes_per_slice && !isa<LanesAttr>(lanes_per_slice)) {
+    return emit_error() << "attribute '" << kLanesPerSliceAttrName
                         << "' requires map from type to 64-bit integer";
   }
 
@@ -557,9 +557,9 @@ auto feature::SIMD::test(feature::SIMD requirements) const -> bool {
     }
   }
 
-  if (const auto required = requirements.getSubSimdLanes(); required) {
+  if (const auto required = requirements.getLanesPerSlice(); required) {
     const auto required_lanes = required.getEntries();
-    const auto provided_lanes = getSubSimdLanes();
+    const auto provided_lanes = getLanesPerSlice();
 
     if (!provided_lanes && !required_lanes.empty()) {
       return false;

@@ -155,28 +155,27 @@ TEST_CASE("mlir::ktdf_arch::feature::SIMD") {
                                      "{ lanes = #ktdf_arch.map<f16 = 2> }"));
   }
 
-  SUBCASE("sub_simd_lanes") {
+  SUBCASE("lanes_per_slice") {
     CHECK(testFeature<feature::SIMD>(
-        &context, "{ sub_simd_lanes = #ktdf_arch.map<> }", "{  }"));
-    CHECK(testFeature<feature::SIMD>(
-        &context, "{ }",
-        "{ sub_simd_lanes = #ktdf_arch.map<> }"));
-    CHECK(testFeature<feature::SIMD>(
-        &context, "{ sub_simd_lanes = #ktdf_arch.map<> }",
-        "{ sub_simd_lanes = #ktdf_arch.map<> }"));
+        &context, "{ lanes_per_slice = #ktdf_arch.map<> }", "{  }"));
+    CHECK(testFeature<feature::SIMD>(&context, "{ }",
+                                     "{ lanes_per_slice = #ktdf_arch.map<> }"));
+    CHECK(testFeature<feature::SIMD>(&context,
+                                     "{ lanes_per_slice = #ktdf_arch.map<> }",
+                                     "{ lanes_per_slice = #ktdf_arch.map<> }"));
 
     CHECK_FALSE(testFeature<feature::SIMD>(
-        &context, "{ }", "{ sub_simd_lanes = #ktdf_arch.map<f16 = 2> }"));
+        &context, "{ }", "{ lanes_per_slice = #ktdf_arch.map<f16 = 2> }"));
     CHECK_FALSE(testFeature<feature::SIMD>(
-        &context, "{ sub_simd_lanes = #ktdf_arch.map<f16 = 1> }",
-        "{ sub_simd_lanes = #ktdf_arch.map<f16 = 2> }"));
+        &context, "{ lanes_per_slice = #ktdf_arch.map<f16 = 1> }",
+        "{ lanes_per_slice = #ktdf_arch.map<f16 = 2> }"));
     CHECK_FALSE(testFeature<feature::SIMD>(
-        &context, "{ sub_simd_lanes = #ktdf_arch.map<f32 = 1> }",
-        "{ sub_simd_lanes = #ktdf_arch.map<f16 = 2> }"));
+        &context, "{ lanes_per_slice = #ktdf_arch.map<f32 = 1> }",
+        "{ lanes_per_slice = #ktdf_arch.map<f16 = 2> }"));
 
     CHECK(testFeature<feature::SIMD>(
-        &context, "{ sub_simd_lanes = #ktdf_arch.map<f16 = 4> }",
-        "{ sub_simd_lanes = #ktdf_arch.map<f16 = 2> }"));
+        &context, "{ lanes_per_slice = #ktdf_arch.map<f16 = 4> }",
+        "{ lanes_per_slice = #ktdf_arch.map<f16 = 2> }"));
   }
 }
 

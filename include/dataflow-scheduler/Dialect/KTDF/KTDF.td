@@ -197,9 +197,9 @@ def KTDF_ReadFromFifoOp : KTDF_Op<"read_from_fifo", [
     %dyn_slot = ktdf.fifo.allocate(%size) -> !ktdf.fifo.slot<"SFU" -> "L1SU", ?xf16>
     %dyn_data = ktdf.read_from_fifo %dyn_slot : !ktdf.fifo.slot<"SFU" -> "L1SU", ?xf16> -> tensor<?xf16>
 
-    // Read a splat the load unit left one element per sub-SIMD group wide
+    // Read a splat the load unit left one element per slice
     %splat = ktdf.read_from_fifo %slot
-        {splat = #ktdf.splat<first_subsimd_lane_to_each_subsimd>}
+        {splat = #ktdf.splat<first_lane_to_each_lane_in_slice>}
         : !ktdf.fifo.slot<"L1LU" -> "SFU", 64xf16> -> memref<64xf16>
     ```
   }];
